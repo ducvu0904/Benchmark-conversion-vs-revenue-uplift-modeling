@@ -18,7 +18,7 @@ class Tarnet:
         epochs=25,
         learning_rate= 1e-3,
         weight_decay = 1e-5,
-        early_stop_metric='loss',
+        early_stop_metric='qini',
         use_ema=True,
         ema_alpha=0.15,
         patience=30,
@@ -30,7 +30,6 @@ class Tarnet:
         self.model = TarnetBase(input_dim,shared_hidden=shared_hidden, outcome_hidden=outcome_hidden, shared_dropout=shared_dropout, outcome_dropout=outcome_droupout)
         self.epoch = epochs
         self.optim = torch.optim.Adam(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-        # self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optim, mode="min", factor = 0.5, patience = 10, min_lr = 1e-5)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
         self.early_stop_metric = early_stop_metric      

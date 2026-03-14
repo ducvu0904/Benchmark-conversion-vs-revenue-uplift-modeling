@@ -2,14 +2,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import kendalltau
-import torch
-
-
-def _to_numpy_1d(arr):
-    """Convert torch/array-like input to flattened NumPy array on CPU."""
-    if isinstance(arr, torch.Tensor):
-        return arr.detach().cpu().numpy().reshape(-1)
-    return np.asarray(arr).reshape(-1)
 
 def auuc(y_true, t_true, uplift_pred, bins=100, plot=True):
     """
@@ -26,9 +18,9 @@ def auuc(y_true, t_true, uplift_pred, bins=100, plot=True):
     -----------
     auuc
     """
-    y_true = _to_numpy_1d(y_true)
-    t_true = _to_numpy_1d(t_true)
-    uplift_pred = _to_numpy_1d(uplift_pred)
+    y_true = np.array(y_true).flatten()
+    t_true = np.array(t_true).flatten()
+    uplift_pred = np.array(uplift_pred).flatten()
     
     data = pd.DataFrame({
         'y': y_true,
@@ -50,25 +42,9 @@ def auuc(y_true, t_true, uplift_pred, bins=100, plot=True):
         print("⚠️ All buckets are NaN after binning!")
         return 0.0 
     
-    #create random baseline
-    control_data = data.loc[data['t']==0.0]
-    treatment_data = data.loc[data['t']==1.0]
-    
-    # print (control_data)
-    # print (treatment_data)
-    mean_control = control_data['y'].mean()
-    mean_treatment = treatment_data["y"].mean()
-    
-    random_control = (np.random.rand(len(control_data)) -0.5)/ 10000 + mean_control
-    random_treatment = (np.random.rand(len(treatment_data))-0.5) /10000 + mean_treatment
-    
-    data.loc[data['t']==0, 'random'] = random_control
-    data.loc[data['t']==1, 'random'] = random_treatment
-    
     #Calculate cumulative gain
     
     cumulative_gain = []
-    cumulative_random =[]
     population =[]
     bucket_ids = sorted(data['bucket'].unique())
     
@@ -92,12 +68,7 @@ def auuc(y_true, t_true, uplift_pred, bins=100, plot=True):
         #AUUC formular
         uplift_gain = (mean_y_treatment - mean_y_control) * n_total
         
-        mean_random_control = control_group['random'].mean()
-        mean_random_treatment = treatment_group['random'].mean()
-        random_gain = (mean_random_treatment - mean_random_control) *n_total
-        
         cumulative_gain.append(uplift_gain)
-        cumulative_random.append(random_gain)
         population.append(n_total)
         
     if len(cumulative_gain) == 0:
@@ -105,15 +76,12 @@ def auuc(y_true, t_true, uplift_pred, bins=100, plot=True):
         print(f"Treatment distribution: {(t_true == 1).sum()} treated, {(t_true == 0).sum()} control")
         return 0.0
 
-    cumulative_random[-1] = cumulative_gain[-1]
-    
     #normalize
     gap0 = cumulative_gain[-1]
     
     norm_factor = abs(gap0) if abs(gap0) > 1e-9 else 1.0
     
     cumulative_gains_norm = [x / norm_factor for x in cumulative_gain]
-    cumulative_rand_norm = [x/ norm_factor for x in cumulative_random]
     
     #normalize x axis
     pop_max = max(population)
@@ -122,7 +90,8 @@ def auuc(y_true, t_true, uplift_pred, bins=100, plot=True):
     #add (0,0)
     x_curve = np.append(0, pop_fraction)
     y_curve = np.append(0, cumulative_gains_norm)
-    y_rand = np.append(0, cumulative_rand_norm)
+    # Deterministic random baseline: straight line from origin to curve endpoint.
+    y_rand = x_curve * y_curve[-1]
     
     #calcute auc using trapezoid rule
     auuc_score = np.trapezoid(y_curve, x_curve)
@@ -139,13 +108,11 @@ def auuc(y_true, t_true, uplift_pred, bins=100, plot=True):
         plt.xlabel("Cumulative percentage of people targeted")
         plt.ylabel("Cumulative uplift")
         plt.title("AUUC")
+        plt.legend()
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.show()
         
-    if gap0 < 0: 
-        auuc_score, auuc_rand = np.trapezoid([i + 1 for i in np.append(0, cumulative_gains_norm)], np.append(0,(np.array(population))/max(population))),\
-                                    np.trapezoid([i + 1 for i in np.append(0, cumulative_rand_norm)], np.append(0,(np.array(population))/max(population)))
     return auuc_score
 
 def auqc(y_true, t_true, uplift_pred, bins=100, plot=True):
@@ -163,9 +130,9 @@ def auqc(y_true, t_true, uplift_pred, bins=100, plot=True):
     -----------
     auqc
     """
-    y_true = _to_numpy_1d(y_true)
-    t_true = _to_numpy_1d(t_true)
-    uplift_pred = _to_numpy_1d(uplift_pred)
+    y_true = np.array(y_true).flatten()
+    t_true = np.array(t_true).flatten()
+    uplift_pred = np.array(uplift_pred).flatten()
 
     data = pd.DataFrame({
         'y': y_true,
@@ -181,23 +148,9 @@ def auqc(y_true, t_true, uplift_pred, bins=100, plot=True):
     except:
         data['bucket'] = pd.cut(-data['pred'], bins, labels=False)
     
-    #create random baseline
-    control_data = data.loc[data['t']==0]
-    treatment_data = data.loc[data['t']==1]
-    
-    mean_control = control_data['y'].mean()
-    mean_treatment = treatment_data["y"].mean()
-    
-    random_control = (np.random.rand(len(control_data)) -0.5)/ 10000 + mean_control
-    random_treatment = (np.random.rand(len(treatment_data))-0.5) /10000 + mean_treatment
-    
-    data.loc[data['t']==0, 'random'] = random_control
-    data.loc[data['t']==1, 'random'] = random_treatment
-    
     #Calculate cumulative gain
     
     cumulative_gain = []
-    cumulative_random =[]
     population =[]
     bucket_ids = sorted(data['bucket'].unique())
     
@@ -221,21 +174,12 @@ def auqc(y_true, t_true, uplift_pred, bins=100, plot=True):
         #AUUC formular
         qini_gain = sum_y_treatment - sum_y_control * (n_treatment/n_control)
         
-        sum_random_control = control_group['random'].sum()
-        sum_random_treatment = treatment_group['random'].sum()
-        random_gain = sum_random_treatment - sum_random_control *(n_treatment/n_control)
-        
         cumulative_gain.append(qini_gain)
-        cumulative_random.append(random_gain)
         population.append(n_total)
         
     if len(cumulative_gain) == 0:
         print("⚠️ No valid buckets computed!")
         return 0.0
-    
-        #force random baseline to meet model at endpoint
-    if len(cumulative_random) >0:
-        cumulative_random[-1] = cumulative_gain[-1]
     
     #normalize
     gap0 = cumulative_gain[-1]
@@ -243,7 +187,6 @@ def auqc(y_true, t_true, uplift_pred, bins=100, plot=True):
     norm_factor = abs(gap0) if abs(gap0) > 1e-9 else 1.0
     
     cumulative_gains_norm = [x / norm_factor for x in cumulative_gain]
-    cumulative_rand_norm = [x/ norm_factor for x in cumulative_random]
     
     #normalize x axis
     pop_max = max(population)
@@ -252,7 +195,8 @@ def auqc(y_true, t_true, uplift_pred, bins=100, plot=True):
     #add (0,0)
     x_curve = np.append(0, pop_fraction)
     y_curve = np.append(0, cumulative_gains_norm)
-    y_rand = np.append(0, cumulative_rand_norm)
+    # Deterministic random baseline: straight line from origin to curve endpoint.
+    y_rand = x_curve * y_curve[-1]
     
     #calcute auc using trapezoid rule
     qini_score = np.trapezoid(y_curve, x_curve)
@@ -269,6 +213,7 @@ def auqc(y_true, t_true, uplift_pred, bins=100, plot=True):
         plt.xlabel("Cumulative percentage of people targeted")
         plt.ylabel("Cumulative qini")
         plt.title("AUQC")
+        plt.legend()
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.show()
@@ -290,9 +235,9 @@ def lift (y_true, t_true, uplift_pred, h=0.3):
     Lift
     """
     
-    y = _to_numpy_1d(y_true)
-    t = _to_numpy_1d(t_true)
-    pred = _to_numpy_1d(uplift_pred)
+    y = np.array(y_true).flatten()
+    t = np.array(t_true).flatten()
+    pred = np.array(uplift_pred).flatten()
     df = pd.DataFrame({'y': y, 't': t, 'pred': pred})
     df = df.sort_values(by='pred', ascending=False).reset_index(drop=True)
     top_k = int(np.ceil(len(df) * h))
@@ -306,31 +251,16 @@ def lift (y_true, t_true, uplift_pred, h=0.3):
 
 def krcc(y_true, t_true, uplift_pred, bins=100):
     """
-    KRCC (Kendall Rank Correlation Coefficient)
-    
-    Measures the rank correlation between predicted uplift scores and observed CATE.
-    Implementation follows the standard approach in uplift modeling literature.
-    
-    Parameters:
-    -----------
-    y_true: spend (1d array)
-    t_true: treatment (0/1) (1d array)  
-    uplift_pred: predicted uplift score (1d array)
+    KRCC (Kendall rank correlation coefficient)
+    y_true: spend (1d)
+    t_true: treatment (0/1) (1d)
+    uplift_pred: predicted uplift score (1d)
     bins: number of buckets to aggregate
-    
-    Returns:
-    --------
-    tau: Kendall's tau coefficient (float)
-         Range: [-1, 1] where 1 = perfect agreement, -1 = perfect disagreement
-    
-    Reference:
-    ----------
-    Kendall's tau measures the ordinal association between two quantities.
-    In uplift context, we want predicted uplift ranking to match true CATE ranking.
+    Return: kendall tau (float)
     """
-    y = _to_numpy_1d(y_true)
-    t = _to_numpy_1d(t_true)
-    pred = _to_numpy_1d(uplift_pred)
+    y = np.array(y_true).flatten()
+    t = np.array(t_true).flatten()
+    pred = np.array(uplift_pred).flatten()
     
     df = pd.DataFrame({'y': y, 't': t, 'pred': pred})
     df = df.sort_values(by='pred', ascending=False).reset_index(drop=True)
@@ -346,14 +276,6 @@ def krcc(y_true, t_true, uplift_pred, bins=100):
     bucket_indices = sorted(df['bucket'].dropna().unique())
     for b in bucket_indices:
         db = df[df['bucket'] == b]
-        
-        # Count samples in each group
-        n_control = (db['t'] == 0).sum()
-        n_treatment = (db['t'] == 1).sum()
-        
-        # Skip bins without both treatment and control
-        if n_control == 0 or n_treatment == 0:
-            continue
 
         mean_control = db.loc[db['t'] == 0, 'y'].mean()
         mean_treatment = db.loc[db['t'] == 1, 'y'].mean()
@@ -361,19 +283,15 @@ def krcc(y_true, t_true, uplift_pred, bins=100):
         if pd.isna(mean_control) or pd.isna(mean_treatment):
             continue
 
-        # Observed CATE in this bin
         cate_val = float(mean_treatment - mean_control)
-        # Average predicted uplift in this bin
         pred_val = float(db['pred'].mean())
 
         cate_list.append(cate_val)
         pred_uplift_list.append(pred_val)
 
     if len(cate_list) < 2:
-        print(f"⚠️ Warning: Only {len(cate_list)} valid bins. Need at least 2 for correlation.")
         return np.nan  
 
-    # Kendall's tau: correlation between rankings
-    tau, p_value = kendalltau(pred_uplift_list, cate_list)
+    tau, p = kendalltau(pred_uplift_list, cate_list)
 
     return tau

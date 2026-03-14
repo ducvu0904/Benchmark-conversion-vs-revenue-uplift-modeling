@@ -1,40 +1,34 @@
-from model import TarnetBase, EarlyStopper, outcome_loss, QiniEarlyStopper
-import sys
-from pathlib import Path
-project_root = Path("/home/ducvu0904/Documents/Lab/Conversion vs revenue benchmarking")
-if str(project_root) not in sys.path:
-    sys.path.append(str(project_root))
-from metrics import auqc
-import torch 
+from model import CFRBase, compute_ipm_loss, outcome_loss
 import numpy as np
-import copy
+import torch
+import copy 
+from metrics import auqc
 
-class Tarnet:
+class CFRnet:
     def __init__(
         self, 
         input_dim,
         shared_hidden=200, 
         outcome_hidden=100, 
+        alpha=1.0,
         epochs=25,
         learning_rate= 1e-3,
-        weight_decay = 1e-5,
-        early_stop_metric='loss',
-        use_ema=True,
+        weight_decay = 1e-4,
+        early_stop_metric='qini',
+        use_ema=False,
+        method = "mmd_linear",
         ema_alpha=0.15,
-        patience=30,
+        patience=10,
         early_stop_start_epoch=0,
-        shared_dropout = 0,
-        outcome_droupout = 0,
-        max_samples = 200
     ):
-        self.model = TarnetBase(input_dim,shared_hidden=shared_hidden, outcome_hidden=outcome_hidden, shared_dropout=shared_dropout, outcome_dropout=outcome_droupout)
+        self.model = CFRBase(input_dim,shared_hidden=shared_hidden, outcome_hidden=outcome_hidden)
         self.epoch = epochs
         self.optim = torch.optim.Adam(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-        # self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optim, mode="min", factor = 0.5, patience = 10, min_lr = 1e-5)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
+        self.alpha = alpha
+        self.method = method
         self.early_stop_metric = early_stop_metric      
-        self.max_samples = max_samples  
         # EMA parameters
         self.use_ema = use_ema
         self.ema_alpha = ema_alpha
@@ -50,20 +44,14 @@ class Tarnet:
         # EMA tracking
         self.ema_qini = None
         self.best_ema_qini = -np.inf
-        self.best_ema_epoch = 0
-        self.best_ema_model_state = None
         self.patience_counter = 0
 
     def fit(self, train_loader, val_loader):
-        print ("🔃🔃🔃Begin training Tarnet🔃🔃🔃")
+        print ("🔃🔃🔃Begin training Dragonnet🔃🔃🔃")
         print (f"📊 Early Stop Metric: {self.early_stop_metric.upper()}")
         print (f"📊 Early Stop Start Epoch: {self.early_stop_start_epoch + 1}")
         
-        if self.early_stop_metric == 'ema_qini':
-            print (f"📊 Strategy: Best EMA Qini (alpha={self.ema_alpha})")
-            print (f"   Restore to epoch with highest smoothed (EMA) Qini score")
-            print (f"   Patience: {self.patience} epochs")
-        elif self.early_stop_metric == 'qini' and self.use_ema:
+        if self.early_stop_metric == 'qini' and self.use_ema:
             print (f"📊 Strategy: Two-Stage EMA Filter (alpha={self.ema_alpha})")
             print (f"   EMA filters noise spikes, Raw Qini determines peak height")
             print (f"   Select checkpoint: raw_qini is highest AND raw_qini >= ema_qini")
@@ -87,16 +75,17 @@ class Tarnet:
                     self.optim.zero_grad()
                     
                     #FORWARD PASS
-                    y0_pred, y1_pred = self.model(x_batch)
+                    z, y0_pred, y1_pred = self.model(x_batch)
                     
                     y_t = y_batch[t_mask]
                     y_c = y_batch[c_mask]
 
                     y0_pred_c = y0_pred[c_mask]
                     y1_pred_t = y1_pred[t_mask]
+                    
+                    ipm = compute_ipm_loss(shared_layer=z, t_true = t_batch, method = self.method)
+                    loss = outcome_loss(y_t= y_t, y_c= y_c, y1_pred=y1_pred_t, y0_pred= y0_pred_c, ipm_loss= ipm, alpha = self.alpha)
 
-                    loss = outcome_loss(y_t= y_t, y_c= y_c, y1_pred=y1_pred_t, y0_pred= y0_pred_c)
-                        
                     loss.backward()
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                     self.optim.step()
@@ -106,55 +95,10 @@ class Tarnet:
             val_qini = self.validate_qini(val_loader)
             val_loss = self.validate(val_loader, epoch)
             
-            # Step the scheduler based on the selected early stopping metric
-            # if self.early_stop_metric == "loss":
-            #     self.scheduler.step(val_loss)
-            # else: 
-            #     self.scheduler.step(val_qini)
-            
-            # current_lr = self.optim.param_groups[0]['lr']
-
             # Early stopping based on selected metric
             
-            # EMA QINI EARLY STOP
-            if self.early_stop_metric == 'ema_qini':
-                # Update EMA
-                if self.ema_qini is None:
-                    self.ema_qini = val_qini
-                else:
-                    self.ema_qini = self.ema_alpha * val_qini + (1 - self.ema_alpha) * self.ema_qini
-                
-                # Track best EMA Qini (always track, patience only after early_stop_start_epoch)
-                if self.ema_qini > self.best_ema_qini:
-                    self.best_ema_qini = self.ema_qini
-                    self.best_ema_epoch = epoch
-                    self.best_ema_model_state = copy.deepcopy(self.model.state_dict())
-                    self.best_qini = val_qini  # Track raw qini at this epoch too
-                    self.patience_counter = 0
-                    best_marker = "⭐ NEW BEST EMA"
-                else:
-                    if epoch >= self.early_stop_start_epoch:
-                        self.patience_counter += 1
-                    best_marker = f"(patience: {self.patience_counter}/{self.patience})"
-                
-                if (epoch+1) % 1 == 0:
-                    print(
-                        f"Epoch {epoch+1}/{self.epoch} | "
-                        f"Loss: {loss.item():.4f} | "
-                        f"Val Loss: {val_loss:.4f} | "
-                        f"Val Qini: {val_qini:.4f} | "
-                        f"EMA Qini: {self.ema_qini:.4f} | "
-                        f"Best EMA: {self.best_ema_qini:.4f} {best_marker}"
-                    )
-                
-                # Early stopping based on patience
-                if epoch >= self.early_stop_start_epoch and self.patience_counter >= self.patience:
-                    print(f"\n🛑 Early stopping triggered at epoch {epoch+1}!")
-                    print(f"   No improvement in EMA Qini for {self.patience} epochs")
-                    break
-            
             # LOSS EARLY STOP
-            elif self.early_stop_metric == 'loss':
+            if self.early_stop_metric == 'loss':
                 if val_loss < self.best_loss:
                     self.best_loss = val_loss
                     self.best_qini = val_qini  # Track qini too for reporting
@@ -170,7 +114,6 @@ class Tarnet:
                     print(
                         f"Epoch {epoch+1}/{self.epoch} | "
                         f"Loss: {loss.item():.4f} | "
-                        f"Total Loss: {loss.item():.4f} | "
                         f"Val Loss: {val_loss:.4f} | "
                         f"Val Qini: {val_qini:.4f} {best_marker}"
                     )
@@ -242,19 +185,13 @@ class Tarnet:
                     if (epoch+1) % 1 == 0:
                         print(
                             f"Epoch {epoch+1}/{self.epoch} | "
-                            f"Loss: {loss.item():.4f} | "
+                            f"Base Loss: {loss.item():.4f} | "
                             f"Val Loss: {val_loss:.4f} | "
                             f"Val Qini: {val_qini:.4f} {best_marker}"
                         )
         
         # RESTORE BEST MODEL
-        if self.early_stop_metric == 'ema_qini' and self.best_ema_model_state is not None:
-            self.model.load_state_dict(self.best_ema_model_state)
-            print(f"\n✅ Training completed! Restored model to epoch {self.best_ema_epoch+1}")
-            print(f"   Best EMA Qini: {self.best_ema_qini:.4f}")
-            print(f"   Raw Qini at best EMA epoch: {self.best_qini:.4f}")
-            print(f"   Strategy: Selected epoch with highest smoothed (EMA) Qini")
-        elif self.best_model_state is not None:
+        if self.best_model_state is not None:
             self.model.load_state_dict(self.best_model_state)
             if self.early_stop_metric == 'loss':
                 print(f"\n✅ Training completed! Restored model to epoch {self.best_epoch+1}")
@@ -269,8 +206,6 @@ class Tarnet:
                 print(f"\n✅ Training completed! Restored model to epoch {self.best_epoch+1} with best Qini score: {self.best_qini:.4f}")
         else:
             print(f"\n⚠️ No valid model state saved. Using final epoch model.")
-            if self.early_stop_metric == 'ema_qini':
-                print(f"   Final EMA Qini: {self.ema_qini:.4f}" if self.ema_qini is not None else "   EMA not initialized")
             
     def validate(self, val_loader, epoch):
         self.model.eval()
@@ -281,52 +216,44 @@ class Tarnet:
                 t_mask = (t.squeeze(1) == 1)
                 c_mask = (t.squeeze(1) == 0)
                 
-                y0, y1 = self.model(x)
+                z, y0, y1 = self.model(x)
                 y_t = y[t_mask]
                 y_c = y[c_mask]
 
                 y0_pred_c = y0[c_mask]
                 y1_pred_t = y1[t_mask]
-
-                loss = outcome_loss(y_t= y_t, y_c= y_c, y1_pred=y1_pred_t, y0_pred= y0_pred_c)
                 
-                val_loss += loss.item()
+                ipm = compute_ipm_loss(shared_layer=z, t_true = t, method = self.method)
+                loss = outcome_loss(y_t= y_t, y_c= y_c, y1_pred=y1_pred_t, y0_pred= y0_pred_c, ipm_loss= ipm, alpha = self.alpha)
+
+                val_loss += loss  
         return val_loss / len(val_loader)
     
     def validate_qini(self, val_loader):
-        """Tính Qini coefficient trên validation set - GPU accelerated"""
+        """Tính Qini coefficient trên validation set"""
         self.model.eval()
-        y_list = []
-        t_list = []
+        y_true_list = []
+        t_true_list = []
         uplift_list = []
         
         with torch.no_grad():
             for x, t, y in val_loader:
                 x = x.to(self.device)
-                y0_pred, y1_pred = self.model(x)
+                z, y0_pred, y1_pred= self.model(x)
                 
-                # Keep tensors on GPU
-                uplift = y1_pred - y0_pred
+                # Tính uplift
+                uplift = (y1_pred - y0_pred).cpu().numpy()
                 
-                y_list.append(y.to(self.device))
-                t_list.append(t.to(self.device))
-                uplift_list.append(uplift)
+                y_true_list.extend(y.cpu().numpy())
+                t_true_list.extend(t.cpu().numpy())
+                uplift_list.extend(uplift)
         
-        # Concatenate all batches on GPU
-        y_all = torch.cat(y_list, dim=0)
-        t_all = torch.cat(t_list, dim=0)
-        uplift_all = torch.cat(uplift_list, dim=0)
-
-        # auqc uses NumPy/Pandas internally, so tensors must be on CPU first.
-        y_all = y_all.detach().cpu().numpy()
-        t_all = t_all.detach().cpu().numpy()
-        uplift_all = uplift_all.detach().cpu().numpy()
-
+        # Tính Qini score (không plot)
         qini_score = auqc(
-            y_true=y_all,
-            t_true=t_all,
-            uplift_pred=uplift_all,
-            bins=100,
+            y_true=np.array(y_true_list),
+            t_true=np.array(t_true_list),
+            uplift_pred=np.array(uplift_list),
+            bins=100,  
             plot=False
         )
         
@@ -334,10 +261,33 @@ class Tarnet:
         
     def predict(self, x):
         self.model.eval()
-        if isinstance(x, torch.Tensor):
-            x = x.to(self.device, dtype=torch.float32)
-        else:
-            x = torch.tensor(x, dtype=torch.float32, device=self.device)
+        x = torch.tensor(x, dtype=torch.float32, device=self.device)
         with torch.no_grad():
-            y0_pred, y1_pred = self.model(x)
-        return y0_pred, y1_pred  
+            z, y0_pred, y1_pred = self.model(x)
+        return y0_pred, y1_pred
+            
+# Xem uplift của một cá nhân bất kỳ
+def get_individual_uplift(model, x_test_tensor, index):
+
+    # Lấy features của cá nhân đó
+    x_individual = x_test_tensor[index:index+1]  # Giữ shape [1, num_features]
+
+    # Move the individual tensor to the same device as the model
+    device = model.device # Get the device of the model using its stored attribute
+    x_individual = x_individual.to(device)
+
+    # Predict
+    y0_pred, y1_pred, t_pred, _ = model.predict(x_individual)
+
+    # Tính uplift
+    uplift = (y1_pred - y0_pred).item()
+
+    result = {
+        "index": index,
+        "y0_pred (control outcome)": y0_pred.item(),
+        "y1_pred (treatment outcome)": y1_pred.item(),
+        "uplift": uplift,
+        "t_pred (propensity)": t_pred.item()
+    }
+
+    return result         
