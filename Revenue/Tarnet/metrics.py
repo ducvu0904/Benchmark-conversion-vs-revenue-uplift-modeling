@@ -4,6 +4,13 @@ import matplotlib.pyplot as plt
 from scipy.stats import kendalltau
 import torch
 
+
+def _to_numpy_1d(arr):
+    """Convert torch/array-like input to flattened NumPy array on CPU."""
+    if isinstance(arr, torch.Tensor):
+        return arr.detach().cpu().numpy().reshape(-1)
+    return np.asarray(arr).reshape(-1)
+
 def auuc(y_true, t_true, uplift_pred, bins=100, plot=True):
     """
     AUUC (Area Under uplift curve)
@@ -19,9 +26,9 @@ def auuc(y_true, t_true, uplift_pred, bins=100, plot=True):
     -----------
     auuc
     """
-    y_true = np.array(y_true).flatten()
-    t_true = np.array(t_true).flatten()
-    uplift_pred = np.array(uplift_pred).flatten()
+    y_true = _to_numpy_1d(y_true)
+    t_true = _to_numpy_1d(t_true)
+    uplift_pred = _to_numpy_1d(uplift_pred)
     
     data = pd.DataFrame({
         'y': y_true,
@@ -156,9 +163,9 @@ def auqc(y_true, t_true, uplift_pred, bins=100, plot=True):
     -----------
     auqc
     """
-    y_true = np.array(y_true).flatten()
-    t_true = np.array(t_true).flatten()
-    uplift_pred = np.array(uplift_pred).flatten()
+    y_true = _to_numpy_1d(y_true)
+    t_true = _to_numpy_1d(t_true)
+    uplift_pred = _to_numpy_1d(uplift_pred)
 
     data = pd.DataFrame({
         'y': y_true,
@@ -283,9 +290,9 @@ def lift (y_true, t_true, uplift_pred, h=0.3):
     Lift
     """
     
-    y = np.array(y_true).flatten()
-    t = np.array(t_true).flatten()
-    pred = np.array(uplift_pred).flatten()
+    y = _to_numpy_1d(y_true)
+    t = _to_numpy_1d(t_true)
+    pred = _to_numpy_1d(uplift_pred)
     df = pd.DataFrame({'y': y, 't': t, 'pred': pred})
     df = df.sort_values(by='pred', ascending=False).reset_index(drop=True)
     top_k = int(np.ceil(len(df) * h))
@@ -321,9 +328,9 @@ def krcc(y_true, t_true, uplift_pred, bins=100):
     Kendall's tau measures the ordinal association between two quantities.
     In uplift context, we want predicted uplift ranking to match true CATE ranking.
     """
-    y = np.array(y_true).flatten()
-    t = np.array(t_true).flatten()
-    pred = np.array(uplift_pred).flatten()
+    y = _to_numpy_1d(y_true)
+    t = _to_numpy_1d(t_true)
+    pred = _to_numpy_1d(uplift_pred)
     
     df = pd.DataFrame({'y': y, 't': t, 'pred': pred})
     df = df.sort_values(by='pred', ascending=False).reset_index(drop=True)

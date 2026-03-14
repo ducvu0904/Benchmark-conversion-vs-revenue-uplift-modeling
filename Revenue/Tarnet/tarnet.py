@@ -18,11 +18,8 @@ class Tarnet:
         ema_alpha=0.15,
         patience=30,
         early_stop_start_epoch=0,
-        ranking_start_epoch = 0,
         shared_dropout = 0,
         outcome_droupout = 0,
-        uplift_ranking = 0.0,
-        response_ranking = 0.0,
         max_samples = 200
     ):
         self.model = TarnetBase(input_dim,shared_hidden=shared_hidden, outcome_hidden=outcome_hidden, shared_dropout=shared_dropout, outcome_dropout=outcome_droupout)
@@ -32,10 +29,7 @@ class Tarnet:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
         self.early_stop_metric = early_stop_metric      
-        self.uplift_lambda = uplift_ranking
-        self.rr_lambda = response_ranking     
         self.max_samples = max_samples  
-        self.ranking_start_epoch = ranking_start_epoch
         # EMA parameters
         self.use_ema = use_ema
         self.ema_alpha = ema_alpha
@@ -322,14 +316,18 @@ class Tarnet:
             y_true=y_all,
             t_true=t_all,
             uplift_pred=uplift_all,
-            bins=100
+            bins=100,
+            plot=False
         )
         
         return qini_score
         
     def predict(self, x):
         self.model.eval()
-        x = torch.tensor(x, dtype=torch.float32, device=self.device)
+        if isinstance(x, torch.Tensor):
+            x = x.to(self.device, dtype=torch.float32)
+        else:
+            x = torch.tensor(x, dtype=torch.float32, device=self.device)
         with torch.no_grad():
             y0_pred, y1_pred = self.model(x)
         return y0_pred, y1_pred  
