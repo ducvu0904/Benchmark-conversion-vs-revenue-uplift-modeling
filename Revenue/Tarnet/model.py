@@ -16,36 +16,36 @@ class TarnetBase(nn.Module):
     outcome_hidden: int
         layer size for conditional outcome layers
     """
-    def __init__(self, input_dim, shared_hidden=200, outcome_hidden=100, shared_dropout = 0.0,  outcome_dropout=0.0):
+    def __init__(self, input_dim, shared_hidden=200, outcome_hidden=100, shared_dropout = 0.0,  outcome_dropout=0.0, activation=nn.ReLU):
         super(TarnetBase, self).__init__()
         self.shared = nn.Sequential(
         nn.Linear(in_features=input_dim, out_features=shared_hidden),
-        nn.ReLU(),
+        activation(),
         nn.Dropout(shared_dropout),
         nn.Linear(in_features=shared_hidden, out_features=shared_hidden),
-        nn.ReLU(),
+        activation(),
         nn.Dropout(shared_dropout),
         nn.Linear(in_features=shared_hidden, out_features=shared_hidden),
-        nn.ReLU(),
+        activation(),
         nn.Dropout(shared_dropout)
         )
         
         self.y0 = nn.Sequential(
         nn.Linear(in_features=shared_hidden, out_features=outcome_hidden),
-        nn.ReLU(),
+        activation(),
         nn.Dropout(outcome_dropout),
         nn.Linear(in_features=outcome_hidden, out_features=outcome_hidden),
-        nn.ReLU(),
+        activation(),
         nn.Dropout(outcome_dropout),
         nn.Linear(in_features=outcome_hidden, out_features=1)
         )
         
         self.y1 = nn.Sequential(
         nn.Linear(in_features=shared_hidden, out_features=outcome_hidden),
-        nn.ReLU(),
+        activation(),
         nn.Dropout(outcome_dropout),
         nn.Linear(in_features=outcome_hidden, out_features=outcome_hidden),
-        nn.ReLU(),
+        activation(),
         nn.Dropout(outcome_dropout),
         nn.Linear(in_features=outcome_hidden, out_features=1)
         )
