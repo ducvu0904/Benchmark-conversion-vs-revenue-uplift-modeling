@@ -1,7 +1,7 @@
 from model import DragonNetBase, EarlyStopper, dragonnet_loss, QiniEarlyStopper, tarreg_loss
 import sys
 from pathlib import Path
-project_root = Path("/home/ducvu0904/Documents/Lab/Conversion vs revenue benchmarking")
+project_root = Path("/home/ducm/Benchmark-conversion-vs-revenue-uplift-modeling")
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 from metrics import auqc
@@ -26,9 +26,10 @@ class Dragonnet:
         patience=10,
         early_stop_start_epoch=0,
         shared_dropout = 0,
-        outcome_droupout = 0
+        outcome_droupout = 0,
+        activation=torch.nn.ReLU
     ):
-        self.model = DragonNetBase(input_dim,shared_hidden=shared_hidden, outcome_hidden=outcome_hidden, shared_dropout=shared_dropout, outcome_dropout=outcome_droupout)
+        self.model = DragonNetBase(input_dim,shared_hidden=shared_hidden, outcome_hidden=outcome_hidden, shared_dropout=shared_dropout, outcome_dropout=outcome_droupout, activation=activation)
         self.epoch = epochs
         self.optim = torch.optim.Adam(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

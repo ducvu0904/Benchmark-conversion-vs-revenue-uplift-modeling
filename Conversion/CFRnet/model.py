@@ -5,39 +5,41 @@ import torch.nn.functional as F
 from ipm import mmd_linear, mmd_rbf, wasserstein
 
 class CFRBase (nn.Module):
-    def __init__(self, input_dim, shared_hidden = 200, outcome_hidden = 100, share_dropout = 0.0, outcome_dropout = 0.0):
+    def __init__(self, input_dim, shared_hidden = 200, outcome_hidden = 100, share_dropout = 0.0, outcome_dropout = 0.0, activation = nn.ReLU):
         super(CFRBase, self).__init__()
         
         self.shared = nn.Sequential(
             nn.Linear(in_features= input_dim, out_features= shared_hidden),
-            nn.ReLU(), 
+            activation(), 
             nn.Dropout(share_dropout),
             nn.Linear(in_features= shared_hidden, out_features= shared_hidden), 
-            nn.ReLU(), 
+            activation(), 
             nn.Dropout(share_dropout),
             nn.Linear(in_features= shared_hidden, out_features= shared_hidden),   
-            nn.ReLU(), 
+            activation  (), 
             nn.Dropout(share_dropout)
         )
         
         self.head_1 = nn.Sequential(
             nn.Linear(in_features= shared_hidden, out_features= outcome_hidden),
-            nn.ReLU(),
+            activation(),
             nn.Dropout(outcome_dropout),
             nn.Linear(in_features= outcome_hidden, out_features= outcome_hidden),
-            nn.ReLU(),
+            activation(),
             nn.Dropout(outcome_dropout),
-            nn.Linear(in_features= outcome_hidden, out_features= 1)
+            nn.Linear(in_features= outcome_hidden, out_features= 1),
+            nn.Sigmoid()
         )
         
         self.head_0 = nn.Sequential(
             nn.Linear(in_features= shared_hidden, out_features= outcome_hidden),
-            nn.ReLU(),
+            activation(),
             nn.Dropout(outcome_dropout),
             nn.Linear(in_features= outcome_hidden, out_features= outcome_hidden),
-            nn.ReLU(),
+            activation(),
             nn.Dropout(outcome_dropout),
-            nn.Linear(in_features= outcome_hidden, out_features= 1)
+            nn.Linear(in_features= outcome_hidden, out_features= 1),
+            nn.Sigmoid()
         )
     
     def forward(self, input):
@@ -51,7 +53,7 @@ class CFRBase (nn.Module):
     
 def compute_ipm_loss(shared_layer, t_true, method = "mmd_rbf", alpha = 1.0):
     if alpha ==0: 
-        return 0
+        return torch.tensor(0.0, device=shared_layer.device, dtype=shared_layer.dtype)
     
     if method == 'mmd_linear':
         distance = mmd_linear(shared_layer, t_true= t_true)
@@ -60,7 +62,7 @@ def compute_ipm_loss(shared_layer, t_true, method = "mmd_rbf", alpha = 1.0):
     elif method == "wasserstein":
         distance = wasserstein(shared_layer, t_true, p=0.5, lamba = 1, iterations=10)
     else:
-        distance = 0    
+        distance = torch.tensor(0.0, device=shared_layer.device, dtype=shared_layer.dtype)
     return distance
 
 def outcome_loss(y_t, y_c, y1_pred, y0_pred, ipm_loss, alpha= 1.0):
