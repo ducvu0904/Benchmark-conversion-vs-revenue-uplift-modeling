@@ -351,4 +351,4 @@ def get_individual_uplift(model, x_test_tensor, index):
         "t_pred (propensity)": t_pred.item()
     }
 
-    return result         
+    return result  

@@ -4,7 +4,7 @@ import numpy as np
 import random
 import warnings
 
-def seed_everything(seed, seed_cuda=False, strict_cuda=False):
+def seed_everything(seed, seed_cuda=True, strict_cuda=False):
     """
     Set random seed for reproducibility.
 

@@ -8,7 +8,6 @@ from metrics import auqc
 import torch 
 import numpy as np
 import copy
-import torch.nn as nn
 
 class Dragonnet:
     def __init__(
@@ -28,7 +27,7 @@ class Dragonnet:
         early_stop_start_epoch=0,
         shared_dropout = 0,
         outcome_droupout = 0,
-        activation = torch.nn.ReLU
+        activation=torch.nn.ReLU
     ):
         self.model = DragonNetBase(input_dim,shared_hidden=shared_hidden, outcome_hidden=outcome_hidden, shared_dropout=shared_dropout, outcome_dropout=outcome_droupout, activation=activation)
         self.epoch = epochs

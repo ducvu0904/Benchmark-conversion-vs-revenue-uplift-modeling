@@ -16,7 +16,7 @@ class DragonNetBase(nn.Module):
     outcome_hidden: int
         layer size for conditional outcome layers
     """
-    def __init__(self, input_dim, shared_hidden=200, outcome_hidden=100, shared_dropout = 0.0,  outcome_dropout=0.0, activation = nn.ReLU):
+    def __init__(self, input_dim, shared_hidden=200, outcome_hidden=100, shared_dropout = 0.0,  outcome_dropout=0.0, activation=nn.ReLU ):
         super(DragonNetBase, self).__init__()
         self.shared = nn.Sequential(
         nn.Linear(in_features=input_dim, out_features=shared_hidden),
@@ -39,8 +39,7 @@ class DragonNetBase(nn.Module):
         nn.Linear(in_features=outcome_hidden, out_features=outcome_hidden),
         activation(),
         nn.Dropout(outcome_dropout),
-        nn.Linear(in_features=outcome_hidden, out_features=1),
-        nn.Sigmoid()
+        nn.Linear(in_features=outcome_hidden, out_features=1)
         )
         
         self.y1 = nn.Sequential(
@@ -50,8 +49,7 @@ class DragonNetBase(nn.Module):
         nn.Linear(in_features=outcome_hidden, out_features=outcome_hidden),
         activation(),
         nn.Dropout(outcome_dropout),
-        nn.Linear(in_features=outcome_hidden, out_features=1),
-        nn.Sigmoid()
+        nn.Linear(in_features=outcome_hidden, out_features=1)
         )
         
         self.epsilon = nn.Linear(in_features=1, out_features=1)
@@ -88,21 +86,12 @@ class DragonNetBase(nn.Module):
 
 
 def dragonnet_loss(y_t, y_c, t_true, t_pred, y0_pred, y1_pred, eps, alpha=1.0):
-    # BCE requires targets in [0, 1]. Fail fast with a clear message.
-    with torch.no_grad():
-        y_min = torch.minimum(y_t.min(), y_c.min()).item()
-        y_max = torch.maximum(y_t.max(), y_c.max()).item()
-    if y_min < 0.0 or y_max > 1.0:
-        raise ValueError(
-            f"Dragonnet BCE outcome loss expects binary targets in [0, 1], got range [{y_min:.4f}, {y_max:.4f}]. "
-            "Use a binary label (e.g., conversion/visit) or switch to the revenue model for continuous outcomes."
-        )
     
     t_pred_clipped = torch.clamp(t_pred, 0.01, 0.99)
     loss_t =  F.binary_cross_entropy(t_pred_clipped, t_true, reduction='mean')
     
-    loss_1 = F.binary_cross_entropy(y1_pred, y_t, reduction='mean')
-    loss_0 = F.binary_cross_entropy(y0_pred, y_c, reduction='mean')
+    loss_1 = torch.mean(torch.square((y_t - y1_pred)))
+    loss_0 = torch.mean(torch.square((y_c - y0_pred)))
     loss_y = (loss_0 + loss_1)
 
     loss = loss_y + alpha * loss_t

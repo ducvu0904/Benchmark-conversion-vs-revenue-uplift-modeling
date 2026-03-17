@@ -1,4 +1,7 @@
-from model import TarnetBase, EarlyStopper, outcome_loss, QiniEarlyStopper
+try:
+    from model import TarnetBase, EarlyStopper, outcome_loss, QiniEarlyStopper
+except ModuleNotFoundError:
+    from Revenue.Tarnet.model import TarnetBase, EarlyStopper, outcome_loss, QiniEarlyStopper
 import sys
 from pathlib import Path
 project_root = Path("/home/ducm/Benchmark-conversion-vs-revenue-uplift-modeling")
@@ -18,16 +21,16 @@ class Tarnet:
         epochs=25,
         learning_rate= 1e-3,
         weight_decay = 1e-5,
-        early_stop_metric='loss',
+        early_stop_metric='qini',
         use_ema=True,
         ema_alpha=0.15,
         patience=30,
         early_stop_start_epoch=0,
         shared_dropout = 0,
-        outcome_droupout = 0,
+        outcome_dropout = 0,
         activation = torch.nn.ReLU,
     ):
-        self.model = TarnetBase(input_dim,shared_hidden=shared_hidden, outcome_hidden=outcome_hidden, shared_dropout=shared_dropout, outcome_dropout=outcome_droupout, activation=activation)
+        self.model = TarnetBase(input_dim,shared_hidden=shared_hidden, outcome_hidden=outcome_hidden, shared_dropout=shared_dropout, outcome_dropout=outcome_dropout, activation=activation)
         self.epoch = epochs
         self.optim = torch.optim.Adam(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay)
         # self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optim, mode="min", factor = 0.5, patience = 10, min_lr = 1e-5)
