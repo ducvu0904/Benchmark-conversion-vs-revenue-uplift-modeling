@@ -25,9 +25,11 @@ class CFRnet:
         ema_alpha=0.15,
         patience=10,
         early_stop_start_epoch=0,
-        activation=torch.nn.ReLU
+        activation=torch.nn.ReLU,
+        shared_dropout=0.0,
+        outcome_dropout=0.0
     ):
-        self.model = CFRBase(input_dim,shared_hidden=shared_hidden, outcome_hidden=outcome_hidden, activation=activation)
+        self.model = CFRBase(input_dim,shared_hidden=shared_hidden, outcome_hidden=outcome_hidden, activation=activation, outcome_dropout=outcome_dropout, share_dropout=shared_dropout)
         self.epoch = epochs
         self.optim = torch.optim.Adam(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
