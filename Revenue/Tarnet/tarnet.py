@@ -4,7 +4,7 @@ except ModuleNotFoundError:
     from Revenue.Tarnet.model import TarnetBase, EarlyStopper, outcome_loss, QiniEarlyStopper
 import sys
 from pathlib import Path
-project_root = Path("/home/ducm/Benchmark-conversion-vs-revenue-uplift-modeling")
+project_root = Path("/home/ducvu0904/Documents/Lab/Conversion vs revenue benchmarking")
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 from metrics import auqc
