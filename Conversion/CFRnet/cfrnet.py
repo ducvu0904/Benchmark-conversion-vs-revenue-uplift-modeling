@@ -1,4 +1,7 @@
-from model import CFRBase, compute_ipm_loss, outcome_loss
+try:
+    from .model import CFRBase, compute_ipm_loss, outcome_loss
+except ImportError:
+    from model import CFRBase, compute_ipm_loss, outcome_loss
 import sys
 from pathlib import Path
 repo_root = Path(__file__).resolve().parents[2]

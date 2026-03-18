@@ -1,4 +1,7 @@
-from model import TarnetBase, EarlyStopper, outcome_loss, QiniEarlyStopper
+try:
+    from .model import TarnetBase, EarlyStopper, outcome_loss, QiniEarlyStopper
+except ImportError:
+    from model import TarnetBase, EarlyStopper, outcome_loss, QiniEarlyStopper
 import sys
 from pathlib import Path
 repo_root = Path(__file__).resolve().parents[2]

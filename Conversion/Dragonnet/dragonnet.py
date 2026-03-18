@@ -1,4 +1,7 @@
-from model import DragonNetBase, EarlyStopper, dragonnet_loss, QiniEarlyStopper, tarreg_loss
+try:
+    from .model import DragonNetBase, EarlyStopper, dragonnet_loss, QiniEarlyStopper, tarreg_loss
+except ImportError:
+    from model import DragonNetBase, EarlyStopper, dragonnet_loss, QiniEarlyStopper, tarreg_loss
 import sys
 from pathlib import Path
 repo_root = Path(__file__).resolve().parents[2]
