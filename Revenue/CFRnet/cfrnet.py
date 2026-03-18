@@ -1,9 +1,13 @@
-from model import CFRBase, compute_ipm_loss, outcome_loss
+try:
+    from .model import CFRBase, compute_ipm_loss, outcome_loss
+except ImportError:
+    from model import CFRBase, compute_ipm_loss, outcome_loss
 import sys
 from pathlib import Path
-project_root = Path("/home/ducm/Benchmark-conversion-vs-revenue-uplift-modeling")
+# Ensure project root is importable when run from either module or notebook context.
+project_root = Path(__file__).resolve().parents[2]
 if str(project_root) not in sys.path:
-    sys.path.append(str(project_root))
+    sys.path.insert(0, str(project_root))
 from metrics import auqc
 import torch 
 import numpy as np

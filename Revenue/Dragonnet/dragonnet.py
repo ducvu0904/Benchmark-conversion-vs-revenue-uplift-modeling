@@ -1,9 +1,12 @@
-from model import DragonNetBase, EarlyStopper, dragonnet_loss, QiniEarlyStopper, tarreg_loss
+try:
+    from .model import DragonNetBase, EarlyStopper, dragonnet_loss, QiniEarlyStopper, tarreg_loss
+except ImportError:
+    from model import DragonNetBase, EarlyStopper, dragonnet_loss, QiniEarlyStopper, tarreg_loss
 import sys
 from pathlib import Path
-project_root = Path("/home/ducm/Benchmark-conversion-vs-revenue-uplift-modeling")
+project_root = Path(__file__).resolve().parents[2]
 if str(project_root) not in sys.path:
-    sys.path.append(str(project_root))
+    sys.path.insert(0, str(project_root))
 from metrics import auqc
 import torch 
 import numpy as np
