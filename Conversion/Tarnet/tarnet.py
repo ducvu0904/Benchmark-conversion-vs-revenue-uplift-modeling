@@ -1,9 +1,9 @@
 from model import TarnetBase, EarlyStopper, outcome_loss, QiniEarlyStopper
 import sys
 from pathlib import Path
-project_root = Path("/home/ducm/Benchmark-conversion-vs-revenue-uplift-modeling")
-if str(project_root) not in sys.path:
-    sys.path.append(str(project_root))
+repo_root = Path(__file__).resolve().parents[2]
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
 from metrics import auqc
 import torch 
 import numpy as np
