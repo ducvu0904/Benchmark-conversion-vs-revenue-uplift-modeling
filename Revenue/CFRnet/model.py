@@ -2,7 +2,10 @@ import torch.nn as nn
 import torch
 import numpy as np
 import torch.nn.functional as F
-from ipm import mmd_linear, mmd_rbf, wasserstein
+try:
+    from .ipm import mmd_linear, mmd_rbf, wasserstein
+except ImportError:
+    from ipm import mmd_linear, mmd_rbf, wasserstein
 
 class CFRBase (nn.Module):
     def __init__(self, input_dim, shared_hidden = 200, outcome_hidden = 100, share_dropout = 0.0, outcome_dropout = 0.0, activation = nn.ReLU):
