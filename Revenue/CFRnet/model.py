@@ -57,7 +57,7 @@ def compute_ipm_loss(shared_layer, t_true, method = "mmd_rbf", alpha = 1.0):
         return torch.tensor(0.0, device=shared_layer.device, dtype=shared_layer.dtype)
     
     if method == 'mmd_linear':
-        distance = mmd_linear(shared_layer, t_true= t_true)
+        distance = mmd_linear(shared_layer, t_true=t_true, p=0.5)
     elif method == 'mmd_rbf':
         distance = mmd_rbf(shared_layer, t_true, p= 0.5, sigma=1.0)
     elif method == "wasserstein":
