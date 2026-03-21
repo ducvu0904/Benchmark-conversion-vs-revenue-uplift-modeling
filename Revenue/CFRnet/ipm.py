@@ -4,44 +4,55 @@ import numpy as np
 
 def mmd_rbf(x, t_true, p, sigma):
     t_true = t_true.squeeze()  # Flatten to 1D for boolean indexing
-    
-    x_treat = x[t_true==1]
-    x_control = x[t_true==0]
-    
+
+    x_treat = x[t_true == 1]
+    x_control = x[t_true == 0]
+
     N1 = x_treat.shape[0]
     N0 = x_control.shape[0]
-    
-    if N1==0 or N0==0:
-        return torch.tensor(0.0, device=x.device, dtype=x.dtype)
-    
-    tt = torch.cdist(x_treat, x_treat) **2
-    cc = torch.cdist(x_control, x_control) **2
-    tc = torch.cdist(x_treat, x_control) **2
-    
-    kernel_tt = torch.exp(-tt / (2*sigma **2))
-    kernel_cc = torch.exp(-cc / (2*sigma **2))
-    kernel_tc = torch.exp(-tc / (2*sigma **2))
-    
-    sum_ktt = (kernel_tt.sum() - N1) / (N1 *(N1-1)) 
-    sum_kcc = (kernel_cc.sum() - N0) / (N0 * (N0-1))
-    
-    mmd = ( p** 2 * sum_ktt + (1.0 - p) ** 2 * sum_kcc - 2) - 2.0 * p * (1.0-p) * kernel_tc.mean()
-    
-    return 4.0 * mmd
 
-def mmd_linear(x, t_true):
+    if N1 == 0 or N0 == 0:
+        return torch.tensor(0.0, device=x.device, dtype=x.dtype)
+
+    tt = torch.cdist(x_treat, x_treat) ** 2
+    cc = torch.cdist(x_control, x_control) ** 2
+    tc = torch.cdist(x_treat, x_control) ** 2
+
+    kernel_tt = torch.exp(-tt / (2 * sigma ** 2))
+    kernel_cc = torch.exp(-cc / (2 * sigma ** 2))
+    kernel_tc = torch.exp(-tc / (2 * sigma ** 2))
+
+    # Use unbiased within-group estimates when possible; otherwise fall back to biased.
+    if N1 > 1 and N0 > 1:
+        sum_ktt = (kernel_tt.sum() - N1) / (N1 * (N1 - 1))
+        sum_kcc = (kernel_cc.sum() - N0) / (N0 * (N0 - 1))
+    else:
+        sum_ktt = kernel_tt.mean()
+        sum_kcc = kernel_cc.mean()
+
+    mmd2 = (
+        p ** 2 * sum_ktt
+        + (1.0 - p) ** 2 * sum_kcc
+        - 2.0 * p * (1.0 - p) * kernel_tc.mean()
+    )
+
+    # Keep the historical scaling so that for p=0.5 this matches the unweighted MMD^2 form.
+    return 4.0 * mmd2
+
+def mmd_linear(x, t_true, p=0.5):
     t_true = t_true.squeeze()  # Flatten to 1D for boolean indexing
-    x_treat = x[t_true==1]
-    x_control = x[t_true==0]
+    x_treat = x[t_true == 1]
+    x_control = x[t_true == 0]
 
     if x_treat.shape[0] == 0 or x_control.shape[0] == 0:
         return torch.tensor(0.0, device=x.device, dtype=x.dtype)
     
     mean_treated = x_treat.mean(dim=0)
     mean_control = x_control.mean(dim=0)
-    
-    mmd = 2 * torch.norm(mean_treated - mean_control)
-    return mmd
+
+    # Linear-kernel MMD^2 in weighted form.
+    diff = p * mean_treated - (1.0 - p) * mean_control
+    return 4.0 * torch.sum(diff ** 2)
 # 
 def wasserstein(x, t_true, p=0.5, lamba = 1, iterations=10):
     t_true = t_true.squeeze()  # Flatten to 1D for boolean indexing
